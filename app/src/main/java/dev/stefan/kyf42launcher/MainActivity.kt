@@ -645,7 +645,9 @@ class MainActivity : AppCompatActivity() {
         notifPanel.visibility = View.GONE
         settingsPanel.visibility = View.GONE
         controlPanel.visibility = View.VISIBLE
-        lsk.text = ""; csk.text = ""; rsk.text = ""
+        // Center key activates the focused tile. Left/right stay blank: they have no
+        // action here, and a label that does nothing is worse than an empty one.
+        lsk.text = ""; csk.text = "SELECT"; rsk.text = ""
         control.refresh()
         controlPanel.post { control.firstView()?.requestFocus() }
     }
