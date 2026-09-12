@@ -32,7 +32,9 @@ Supports Android 8+.
   system PIN is set) and a **control center** (torch, brightness, ringer/DND,
   bluetooth).
 - **Notification panel** backed by a `NotificationListenerService`.
-- Color **themes** (accent + wallpaper pairs) and a first-run **setup wizard**.
+- Color **themes** (accent + wallpaper pairs), plus **custom wallpaper** from
+  your own images — center-cropped, held as a persisted URI across reboots, and
+  mirrored to the system keyguard. Settable in the **setup wizard** or Settings.
 - Semantic **key bindings** layer — any D-pad phone can be mapped, not just the
   KYF42.
 - Hidden system nav + status bars (immersive).

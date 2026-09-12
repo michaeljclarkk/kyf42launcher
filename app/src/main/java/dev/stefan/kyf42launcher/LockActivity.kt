@@ -38,7 +38,7 @@ class LockActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val colorTheme = Themes.apply(this)
         setContentView(R.layout.activity_lock)
-        findViewById<View>(R.id.rootLock).setBackgroundResource(colorTheme.wallpaperRes)
+        Wallpapers.apply(this, findViewById(R.id.rootLock), colorTheme.wallpaperRes)
 
         // Show over the keyguard and light the screen when armed.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {

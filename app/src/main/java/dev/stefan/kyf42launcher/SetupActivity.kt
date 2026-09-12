@@ -14,6 +14,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
@@ -27,7 +28,7 @@ import androidx.core.content.ContextCompat
  */
 class SetupActivity : AppCompatActivity() {
 
-    private enum class Step { WELCOME, KEYS, PERMISSIONS, THEME, DONE }
+    private enum class Step { WELCOME, KEYS, PERMISSIONS, THEME, WALLPAPER, DONE }
     private val steps = Step.values()
     private var index = 0
     private val step get() = steps[index]
@@ -52,7 +53,7 @@ class SetupActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val theme = Themes.apply(this)   // accent overlay, before inflation
         setContentView(R.layout.activity_setup)
-        findViewById<View>(R.id.rootSetup).setBackgroundResource(theme.wallpaperRes)
+        Wallpapers.apply(this, findViewById(R.id.rootSetup), theme.wallpaperRes)
 
         index = savedInstanceState?.getInt(KEY_INDEX, 0) ?: 0
 
@@ -103,6 +104,7 @@ class SetupActivity : AppCompatActivity() {
             Step.KEYS -> renderKeys()
             Step.PERMISSIONS -> renderPermissions()
             Step.THEME -> renderTheme()
+            Step.WALLPAPER -> renderWallpaper()
             Step.DONE -> renderDone()
         }
         backBtn.visibility = if (index == 0) View.INVISIBLE else View.VISIBLE
@@ -160,6 +162,33 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderWallpaper() {
+        titleView.text = "Wallpaper"
+        subtitleView.text = "Keep the theme's mesh, or use a photo from your phone."
+        val custom = Wallpapers.hasCustom(this)
+        val theme = Themes.current(this)
+        contentRow("Theme (${theme.label})", if (custom) null else "Selected") {
+            Wallpapers.clearCustom(this)
+            applyWallpaper()
+            render()
+        }
+        contentRow("Choose image…", if (custom) "Selected" else null) {
+            pickWallpaper.launch(arrayOf("image/*"))
+        }
+    }
+
+    // OpenDocument (not GET_CONTENT) so the grant is persistable across reboots.
+    private val pickWallpaper = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { Wallpapers.setCustom(this, it) }
+        applyWallpaper()
+        render()
+    }
+
+    private fun applyWallpaper() =
+        Wallpapers.apply(this, findViewById(R.id.rootSetup), Themes.current(this).wallpaperRes)
+
     private fun renderDone() {
         titleView.text = "You're all set"
         subtitleView.text = "Enjoy your phone."
@@ -168,6 +197,7 @@ class SetupActivity : AppCompatActivity() {
         content.addView(bodyText("• Soft keys:  ${softKeyStatus()}"))
         content.addView(bodyText("• Permissions:  $granted of ${permissions().size} granted"))
         content.addView(bodyText("• Theme:  ${Themes.current(this).label}"))
+        content.addView(bodyText("• Wallpaper:  ${Wallpapers.label(this)}"))
     }
 
     // --- Soft-key learn -----------------------------------------------------

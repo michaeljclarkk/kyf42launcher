@@ -27,6 +27,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.core.graphics.drawable.toBitmap
@@ -93,7 +94,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SetupActivity::class.java))
         }
         setContentView(R.layout.activity_main)
-        findViewById<View>(R.id.rootMain).setBackgroundResource(colorTheme.wallpaperRes)
+        Wallpapers.apply(this, findViewById(R.id.rootMain), colorTheme.wallpaperRes)
 
         homeView = findViewById(R.id.homeView)
         dock = findViewById(R.id.dock)
@@ -218,19 +219,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Match the system keyguard to our theme so a secure lock still looks like ours.
-    private fun applyLockWallpaperOnce() {
-        val prefs = getSharedPreferences("kyf42", Context.MODE_PRIVATE)
-        if (prefs.getBoolean("lock_wp_set", false)) return
-        try {
-            val wm = android.app.WallpaperManager.getInstance(this)
-            val bmp = android.graphics.BitmapFactory.decodeResource(
-                resources, Themes.current(this).wallpaperRes
-            )
-            wm.setBitmap(bmp, null, true, android.app.WallpaperManager.FLAG_LOCK)
-            prefs.edit().putBoolean("lock_wp_set", true).apply()
-        } catch (_: Exception) { /* SET_WALLPAPER unavailable: skip */ }
-    }
+    // Match the system keyguard to our wallpaper so a secure lock still looks like ours.
+    private fun applyLockWallpaperOnce() = Wallpapers.syncSystemLock(this)
 
     // --- Favorites dock: default apps + an "All apps" tile ---
     private val dockPkgs = mutableSetOf<String>()
@@ -702,6 +692,7 @@ class MainActivity : AppCompatActivity() {
         addSettingsHeader("Appearance")
         val cur = Themes.current(this)
         addSettingsRow("Theme", cur.label) { showThemePicker() }
+        addSettingsRow("Wallpaper", Wallpapers.label(this)) { showWallpaperPicker() }
         addSettingsHeader("Dock")
         addSettingsRow("Reset dock to defaults", null) {
             saveDockPkgs(emptyList()); buildDock(); buildSettings()
@@ -850,6 +841,46 @@ class MainActivity : AppCompatActivity() {
         }
         dialog.show()
         rows.getChildAt(0)?.requestFocus()
+    }
+
+    // --- Wallpaper ---
+    // OpenDocument (not GET_CONTENT) so the grant is persistable: the launcher
+    // reads the image itself on every boot, not just in this session.
+    private val pickWallpaper = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { Wallpapers.setCustom(this, it); recreate() }
+    }
+
+    private fun showWallpaperPicker() {
+        val view = layoutInflater.inflate(R.layout.dialog_list, null)
+        view.findViewById<TextView>(R.id.listTitle).text = "Wallpaper"
+        val rows = view.findViewById<LinearLayout>(R.id.listRows)
+        val dialog = makeSheet(view)
+        val custom = Wallpapers.hasCustom(this)
+
+        val themeRow = sheetRow(
+            (if (custom) "" else "● ") + "Theme: ${Themes.current(this).label}"
+        )
+        if (!custom) themeRow.setTextColor(Themes.accent(this))
+        themeRow.setOnClickListener { dialog.dismiss(); useThemeWallpaper() }
+        rows.addView(themeRow)
+
+        val pickRow = sheetRow((if (custom) "● " else "") + "Choose image…")
+        if (custom) pickRow.setTextColor(Themes.accent(this))
+        pickRow.setOnClickListener {
+            dialog.dismiss()
+            pickWallpaper.launch(arrayOf("image/*"))
+        }
+        rows.addView(pickRow)
+
+        dialog.show()
+        (if (custom) pickRow else themeRow).requestFocus()
+    }
+
+    private fun useThemeWallpaper() {
+        Wallpapers.clearCustom(this)
+        recreate()   // back to the theme mesh, and resync the keyguard wallpaper
     }
 
     // --- Debug mode ---
