@@ -661,7 +661,9 @@ class MainActivity : AppCompatActivity() {
         controlPanel.visibility = View.GONE
         settingsPanel.visibility = View.GONE
         settingsPanel.visibility = View.VISIBLE
-        lsk.text = ""; csk.text = ""; rsk.text = ""
+        // Center key activates the focused row. Left/right stay blank, matching the
+        // control center: neither has an action here, and Back is the physical key.
+        lsk.text = ""; csk.text = "SELECT"; rsk.text = ""
         buildSettings()
         settingsRows.post {
             (0 until settingsRows.childCount).map { settingsRows.getChildAt(it) }
