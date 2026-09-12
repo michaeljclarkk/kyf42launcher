@@ -94,6 +94,8 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(R.layout.activity_main)
         findViewById<View>(R.id.rootMain).setBackgroundResource(colorTheme.wallpaperRes)
+        SystemBars.hideIfStock(this, findViewById(R.id.topBar))
+        SystemBars.insetForStock(this, findViewById(R.id.rootMain))
 
         homeView = findViewById(R.id.homeView)
         dock = findViewById(R.id.dock)
@@ -150,7 +152,8 @@ class MainActivity : AppCompatActivity() {
         loadApps()
         buildDock()
         showHome()
-        setupStatusBar()
+        // Only feeds our own top bar; pointless when the stock bar is chosen.
+        if (!SystemBars.useStock(this)) setupStatusBar()
         widgets.refresh()
         hideSystemBars()
 
@@ -171,7 +174,11 @@ class MainActivity : AppCompatActivity() {
 
     // Start/stop the system-wide bars per the setting + overlay permission.
     private fun updateOverlayBars() {
+        // The stock bar wins: an overlay window sits below the status bar on O+, so
+        // the two would both draw and their rows would collide. Choosing the stock
+        // bar therefore forces the overlay bars off and un-hides the stock bar.
         val on = prefs.getBoolean("overlay_bars", true) &&
+            !SystemBars.useStock(this) &&
             android.provider.Settings.canDrawOverlays(this)
         val intent = Intent(this, OverlayBarsService::class.java)
         if (on) startService(intent) else stopService(intent)
@@ -382,18 +389,9 @@ class MainActivity : AppCompatActivity() {
         telephony?.listen(signalListener, PhoneStateListener.LISTEN_NONE)
     }
 
-    // Hide BOTH system bars (nav + status). We draw our own status bar (topBar).
+    // Hide the system bars (nav always; status too unless the stock bar is chosen).
     // Immersive-sticky so they stay hidden. Re-assert whenever we regain focus.
-    private fun hideSystemBars() {
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-    }
+    private fun hideSystemBars() = SystemBars.apply(this)
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -707,7 +705,20 @@ class MainActivity : AppCompatActivity() {
             saveDockPkgs(emptyList()); buildDock(); buildSettings()
         }
         addSettingsHeader("System")
-        addSettingsRow("Bars over other apps", onOffStr(prefs.getBoolean("overlay_bars", true))) {
+        addSettingsRow("Status bar", SystemBars.label(this)) {
+            SystemBars.setUseStock(this, !SystemBars.useStock(this))
+            updateOverlayBars()   // the stock bar and our overlay can't coexist
+            recreate()            // content must re-lay-out under the chosen bar
+        }
+        addSettingsRow(
+            "Bars over other apps",
+            if (SystemBars.useStock(this)) "Off (system bar)"
+            else onOffStr(prefs.getBoolean("overlay_bars", true))
+        ) {
+            if (SystemBars.useStock(this)) {
+                toast("Unavailable while the system status bar is on")
+                return@addSettingsRow
+            }
             val now = !prefs.getBoolean("overlay_bars", true)
             prefs.edit().putBoolean("overlay_bars", now).apply()
             if (now && !android.provider.Settings.canDrawOverlays(this)) {
