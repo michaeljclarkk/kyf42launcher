@@ -54,6 +54,7 @@ class SetupActivity : AppCompatActivity() {
         val theme = Themes.apply(this)   // accent overlay, before inflation
         setContentView(R.layout.activity_setup)
         Wallpapers.apply(this, findViewById(R.id.rootSetup), theme.wallpaperRes)
+        SystemBars.insetForStock(this, findViewById(R.id.rootSetup))
 
         index = savedInstanceState?.getInt(KEY_INDEX, 0) ?: 0
 
@@ -402,16 +403,7 @@ class SetupActivity : AppCompatActivity() {
         if (index > 0) goBack()   // first step: stay in setup
     }
 
-    private fun hideSystemBars() {
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-    }
+    private fun hideSystemBars() = SystemBars.apply(this)
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)

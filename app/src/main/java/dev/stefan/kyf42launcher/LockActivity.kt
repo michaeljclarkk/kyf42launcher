@@ -55,6 +55,12 @@ class LockActivity : AppCompatActivity() {
         // If the keyguard is dismissed by any means, drop our screen.
         registerReceiver(userPresentReceiver, IntentFilter(Intent.ACTION_USER_PRESENT))
 
+        // Our own status row + its fade would double up with the stock bar.
+        SystemBars.hideIfStock(
+            this, findViewById(R.id.lockTopFade), findViewById(R.id.lockStatusRow)
+        )
+        SystemBars.insetForStock(this, findViewById(R.id.rootLock))
+
         lockWifi = findViewById(R.id.lockWifi)
         lockBattery = findViewById(R.id.lockBattery)
         val carrier = findViewById<TextView>(R.id.lockCarrier)
@@ -107,16 +113,7 @@ class LockActivity : AppCompatActivity() {
         }
     }
 
-    private fun hideSystemBars() {
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-    }
+    private fun hideSystemBars() = SystemBars.apply(this)
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
