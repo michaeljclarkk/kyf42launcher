@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     private var connectivity: ConnectivityManager? = null
     private var wifiManager: WifiManager? = null
     private lateinit var widgets: HomeWidgets
+    private lateinit var media: MediaWidget
 
     private lateinit var gridContainer: View
     private lateinit var gridSearch: EditText
@@ -149,6 +150,15 @@ class MainActivity : AppCompatActivity() {
             findViewById(R.id.rowEvent), findViewById(R.id.evText),
             findViewById(R.id.rowAlarm), findViewById(R.id.alText),
         )
+
+        media = MediaWidget(
+            this,
+            findViewById(R.id.rowMedia),
+            findViewById(R.id.mdTitle), findViewById(R.id.mdArtist),
+            findViewById(R.id.mdPrev), findViewById(R.id.mdPlay), findViewById(R.id.mdNext),
+            onLayoutChanged = { widgets.reflowCard() },
+        )
+        media.attach()
 
         loadApps()
         buildDock()
@@ -392,6 +402,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         hideSystemBars()   // re-assert before the window is shown (lock dismissal)
         if (::widgets.isInitialized) widgets.refresh()
+        if (::media.isInitialized) media.refresh()
         // Recents change while we're away — keep the carousel current.
         if (screen == Screen.HOME && ::carousel.isInitialized) buildCarousel()
         OverlayBarsService.instance?.setHidden(true)   // we draw our own bars
@@ -556,6 +567,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- Now-playing row: focus routing on Home ---
+    // The row lives in the info card, which framework focus traversal never
+    // reaches from the dock, so Home's D-pad handling routes to it explicitly.
+    private fun mediaRowFocused(): Boolean =
+        currentFocus?.id in setOf(R.id.mdPrev, R.id.mdPlay, R.id.mdNext)
+
+    private fun focusMediaRow(): Boolean {
+        if (!::media.isInitialized || !media.enabled()) return false
+        if (findViewById<View>(R.id.rowMedia).visibility != View.VISIBLE) return false
+        return findViewById<View>(R.id.mdPlay).requestFocus()
+    }
+
     // --- Screen state (KaiOS: home clock  <->  app grid) ---
     private fun showHome() {
         screen = Screen.HOME
@@ -625,6 +648,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun onNotifsChanged() {
         if (screen == Screen.NOTIF) refreshNotifs()
+        // Media notifications are how track changes surface, so this is also the
+        // refresh point for the now-playing row — no polling needed.
+        if (::media.isInitialized) {
+            media.refresh()
+            if (screen == Screen.HOME) buildCarousel()
+        }
         if (screen == Screen.HOME) {
             val n = LockListenerService.instance?.current()?.size ?: 0
             lsk.text = if (n > 0) "● $n Alerts" else "Alerts"
@@ -695,6 +724,11 @@ class MainActivity : AppCompatActivity() {
         val cur = Themes.current(this)
         addSettingsRow("Theme", cur.label) { showThemePicker() }
         addSettingsRow("Wallpaper", Wallpapers.label(this)) { showWallpaperPicker() }
+        addSettingsRow("Now playing widget", onOffStr(media.enabled())) {
+            MediaWidget.setEnabled(this, !media.enabled())
+            media.refresh()
+            buildSettings()
+        }
         addSettingsHeader("Dock")
         addSettingsRow("Reset dock to defaults", null) {
             saveDockPkgs(emptyList()); buildDock(); buildSettings()
@@ -1058,15 +1092,28 @@ class MainActivity : AppCompatActivity() {
                 keyCode == KeyEvent.KEYCODE_DPAD_UP -> {
                     val f = currentFocus
                     if (f?.parent === carousel) {
-                        if (carousel.indexOfChild(f) == 0) { showGrid(); return true }
+                        if (carousel.indexOfChild(f) == 0) {
+                            // Top of the rail: into the now-playing row if it's
+                            // showing, otherwise straight to the grid.
+                            if (!focusMediaRow()) { showGrid(); return true }
+                            return true
+                        }
                         // inner item: let focus traversal move up the rail
+                    } else if (mediaRowFocused()) {
+                        showGrid(); return true
                     } else if (carousel.visibility == View.VISIBLE && carousel.childCount > 0) {
                         carousel.getChildAt(carousel.childCount - 1).requestFocus()
+                        return true
+                    } else if (focusMediaRow()) {
                         return true
                     } else { showGrid(); return true }
                 }
                 keyCode == KeyEvent.KEYCODE_DPAD_DOWN || lk == LauncherKey.SOFT_LEFT -> {
                     val f = currentFocus
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && mediaRowFocused()) {
+                        dock.getChildAt(0)?.requestFocus()
+                        return true
+                    }
                     if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && f?.parent === carousel) {
                         if (carousel.indexOfChild(f) == carousel.childCount - 1) {
                             dock.getChildAt(0)?.requestFocus()

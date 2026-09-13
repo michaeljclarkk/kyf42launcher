@@ -221,6 +221,87 @@
                         android:shadowRadius="4"
                         android:textSize="12sp" />
                 </LinearLayout>
+
+                <!-- Now playing: only present while a media session exists, so it
+                     costs nothing at rest. D-pad: left/right skip, center toggles. -->
+                <LinearLayout
+                    android:id="@+id/rowMedia"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="9dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/mdTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:singleLine="true"
+                        android:ellipsize="end"
+                        android:maxWidth="240dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:textColor="@color/text_primary"
+                        android:shadowColor="#40000000"
+                        android:shadowDy="2"
+                        android:shadowRadius="6"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/mdArtist"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:singleLine="true"
+                        android:ellipsize="end"
+                        android:maxWidth="240dp"
+                        android:textColor="@color/text_secondary"
+                        android:shadowColor="#40000000"
+                        android:shadowDy="2"
+                        android:shadowRadius="4"
+                        android:textSize="11sp" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:id="@+id/mdPrev"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:padding="7dp"
+                            android:src="@drawable/ic_prev"
+                            android:focusable="true"
+                            android:focusableInTouchMode="false"
+                            android:background="@drawable/opt_row_bg"
+                            android:contentDescription="Previous track" />
+
+                        <ImageView
+                            android:id="@+id/mdPlay"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:padding="7dp"
+                            android:src="@drawable/ic_play"
+                            android:focusable="true"
+                            android:focusableInTouchMode="false"
+                            android:background="@drawable/opt_row_bg"
+                            android:contentDescription="Play or pause" />
+
+                        <ImageView
+                            android:id="@+id/mdNext"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:padding="7dp"
+                            android:src="@drawable/ic_next"
+                            android:focusable="true"
+                            android:focusableInTouchMode="false"
+                            android:background="@drawable/opt_row_bg"
+                            android:contentDescription="Next track" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
 
             <Space

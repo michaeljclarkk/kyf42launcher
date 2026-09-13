@@ -38,11 +38,19 @@ class HomeWidgets(
         updateAlarm()
         updateCalendar()
         updateWeather()   // async
-        updateCardVisibility()
+        reflowCard()
     }
 
-    private fun updateCardVisibility() {
-        val any = rowWeather.isVisible || rowEvent.isVisible || rowAlarm.isVisible
+    // Any visible child keeps the card up — including the now-playing row, which
+    // this class doesn't own and so can't enumerate by name. Public because the
+    // media row changes independently and needs to re-trigger it.
+    fun reflowCard() {
+        val cardGroup = card as? android.view.ViewGroup
+        val any = if (cardGroup != null) {
+            (0 until cardGroup.childCount).any { cardGroup.getChildAt(it).isVisible }
+        } else {
+            rowWeather.isVisible || rowEvent.isVisible || rowAlarm.isVisible
+        }
         card.visibility = if (any) View.VISIBLE else View.GONE
     }
 
@@ -121,7 +129,7 @@ class HomeWidgets(
                     wxCond.text = wmoText(code)
                     wxIcon.setImageResource(wmoIcon(code))
                     rowWeather.visibility = View.VISIBLE
-                    updateCardVisibility()
+                    reflowCard()
                 }
             } catch (_: Exception) { /* offline / no location: leave hidden */ }
         }.start()
