@@ -154,6 +154,7 @@ class MainActivity : AppCompatActivity() {
         media = MediaWidget(
             this,
             findViewById(R.id.rowMedia),
+            findViewById(R.id.mdArt),
             findViewById(R.id.mdTitle), findViewById(R.id.mdArtist),
             findViewById(R.id.mdPrev), findViewById(R.id.mdPlay), findViewById(R.id.mdNext),
             onLayoutChanged = { widgets.reflowCard() },

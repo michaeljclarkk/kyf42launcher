@@ -19,6 +19,7 @@ import android.widget.TextView
 class MediaWidget(
     private val activity: Activity,
     private val row: View,
+    private val art: ImageView,
     private val title: TextView,
     private val artist: TextView,
     private val prev: ImageView,
@@ -30,6 +31,12 @@ class MediaWidget(
 
     /** Remembered so "open player" still works when no session is live. */
     private var lastPackage: String? = null
+
+    // Players publish album art at ~640px. Decoding that on every notification
+    // would be brutal here, so art is only re-read when the track actually
+    // changes, downscaled once, and the previous bitmap released.
+    private var artKey: String? = null
+    private var artBitmap: android.graphics.Bitmap? = null
 
     fun enabled(): Boolean = prefs.getBoolean(KEY_ENABLED, true)
 
@@ -74,6 +81,7 @@ class MediaWidget(
             prev.visibility = View.GONE
             next.visibility = View.GONE
             playPause.setImageResource(R.drawable.ic_play)
+            setArt(null, "idle")
             onLayoutChanged()
             return
         }
@@ -88,7 +96,39 @@ class MediaWidget(
         playPause.setImageResource(
             if (now.playing) R.drawable.ic_pause else R.drawable.ic_play
         )
+        setArt(now.art, "${now.title}|${now.artist}")
         onLayoutChanged()
+    }
+
+    /**
+     * Show [raw] scaled to the view, skipping the work unless the track changed.
+     * The source bitmap is our own unparceled copy, so it is released once the
+     * scaled version exists — on a 1GB device a stray 640px ARGB bitmap is 1.6MB.
+     */
+    private fun setArt(raw: android.graphics.Bitmap?, key: String) {
+        if (key == artKey) return
+        artKey = key
+
+        if (raw == null) {
+            artBitmap?.recycle()
+            artBitmap = null
+            art.setImageDrawable(null)
+            return
+        }
+
+        val maxPx = (ART_DP * activity.resources.displayMetrics.density).toInt()
+            .coerceAtLeast(48)
+        val scaled = if (raw.width <= maxPx && raw.height <= maxPx) raw else {
+            val scale = maxPx.toFloat() / maxOf(raw.width, raw.height)
+            val w = (raw.width * scale).toInt().coerceAtLeast(1)
+            val h = (raw.height * scale).toInt().coerceAtLeast(1)
+            val out = android.graphics.Bitmap.createScaledBitmap(raw, w, h, true)
+            if (out !== raw) raw.recycle()
+            out
+        }
+        artBitmap?.recycle()
+        artBitmap = scaled
+        art.setImageBitmap(scaled)
     }
 
     private fun idleLabel(): String =
@@ -104,6 +144,10 @@ class MediaWidget(
 
     companion object {
         const val KEY_ENABLED = "media_widget"
+
+        /** Matches the layout's 52dp art box. */
+        private const val ART_DP = 52
+
         fun setEnabled(ctx: Context, on: Boolean) =
             ctx.getSharedPreferences("kyf42", Context.MODE_PRIVATE)
                 .edit().putBoolean(KEY_ENABLED, on).apply()

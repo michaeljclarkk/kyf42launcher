@@ -28,6 +28,8 @@ object MediaControl {
         val artist: String,
         val playing: Boolean,
         val packageName: String,
+        /** Raw art as the player published it; large, caller must downscale. */
+        val art: android.graphics.Bitmap?,
     )
 
     private fun listener(ctx: Context): ComponentName =
@@ -53,6 +55,9 @@ object MediaControl {
             artist = artist.orEmpty(),
             playing = c.playbackState?.state == PlaybackState.STATE_PLAYING,
             packageName = c.packageName,
+            // ALBUM_ART first; some players only publish the generic ART key.
+            art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                ?: md.getBitmap(MediaMetadata.METADATA_KEY_ART),
         )
     } catch (_: Exception) {
         null
