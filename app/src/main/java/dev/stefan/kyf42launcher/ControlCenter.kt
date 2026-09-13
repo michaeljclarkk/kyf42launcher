@@ -34,6 +34,10 @@ class ControlCenter(
             addTile(R.drawable.ic_flash, "Flashlight", { toggleTorch() }) { if (torchOn) "On" else "Off" }
         }
         addTile(R.drawable.ic_bright, "Brightness", { cycleBrightness() }) { "${brightnessPct()}%" }
+        // This phone has no volume key at all (no VOLUME_* in any built-in
+        // keylayout), so without this tile the only way to change volume is
+        // Settings or headset buttons.
+        addTile(R.drawable.ic_vol, "Volume", { cycleVolume() }) { "${volumePct()}%" }
         addTile(R.drawable.ic_ringer, "Profile", { cycleRinger() }) { ringerLabel() }
         // Settings.Panel exists only on API 29+; older releases get the full wifi screen.
         val wifiAction = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
@@ -96,6 +100,32 @@ class ControlCenter(
     private fun brightness(): Int =
         try { Settings.System.getInt(a.contentResolver, Settings.System.SCREEN_BRIGHTNESS) } catch (_: Exception) { 128 }
     private fun brightnessPct(): Int = (brightness() * 100 / 255)
+
+    // --- Volume: cycle 25/50/75/100 on the media stream, like Brightness above.
+    // Media, not ring: ringer level is already covered by the Profile tile. No
+    // permission needed, unlike brightness (which is why this one can't fail).
+    private fun cycleVolume() {
+        val am = a.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return
+        val targets = intArrayOf(
+            max / 4, max / 2, max * 3 / 4, max
+        ).map { it.coerceAtLeast(1) }
+        val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val next = targets.firstOrNull { it > cur + 1 } ?: targets[0]
+        try {
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0)
+        } catch (_: SecurityException) {
+            // DND can block volume changes; nothing useful to do but leave it.
+        }
+    }
+
+    private fun volumePct(): Int {
+        val am = a.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return 0
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return 0
+        return am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max
+    }
 
     // --- Ringer (silent needs notification-policy access) ---
     private fun cycleRinger() { Ringer.cycle(a) }
