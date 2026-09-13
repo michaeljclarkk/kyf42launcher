@@ -137,7 +137,12 @@ class MainActivity : AppCompatActivity() {
         LockListenerService.onChange = { runOnUiThread { onNotifsChanged() } }
 
         controlPanel = findViewById(R.id.controlPanel)
-        control = ControlCenter(this, findViewById(R.id.ctrlGrid)) { showSettings() }
+        control = ControlCenter(
+            this,
+            findViewById(R.id.ctrlGrid),
+            onSettings = { showSettings() },
+            onFocusChanged = { updateControlSoftKeys() },
+        )
         control.build()
         settingsPanel = findViewById(R.id.settingsPanel)
         settingsRows = findViewById(R.id.settingsRows)
@@ -675,11 +680,22 @@ class MainActivity : AppCompatActivity() {
         notifPanel.visibility = View.GONE
         settingsPanel.visibility = View.GONE
         controlPanel.visibility = View.VISIBLE
-        // Center key activates the focused tile. Left/right stay blank: they have no
-        // action here, and a label that does nothing is worse than an empty one.
-        lsk.text = ""; csk.text = "SELECT"; rsk.text = ""
         control.refresh()
-        controlPanel.post { control.firstView()?.requestFocus() }
+        controlPanel.post {
+            control.firstView()?.requestFocus()
+            updateControlSoftKeys()   // focus may have landed on a steppable tile
+        }
+    }
+
+    // On the control center the soft keys step the focused value when it has one
+    // (Brightness, Volume) and stay inert otherwise. Relabelled as focus moves.
+    private fun updateControlSoftKeys() {
+        if (::control.isInitialized && control.focusedCanStep()) {
+            lsk.text = "−"; rsk.text = "+"
+        } else {
+            lsk.text = ""; rsk.text = ""
+        }
+        csk.text = "SELECT"
     }
 
     // --- Settings ---
@@ -1143,7 +1159,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 else -> {}
             }
-            Screen.CONTROL -> {}   // tiles handle focus/center; Back exits (onBackPressed)
+            Screen.CONTROL -> when {
+                // Soft keys step the focused value, but only where that means
+                // something; elsewhere they stay as inert as they were.
+                !control.focusedCanStep() -> {}
+                lk == LauncherKey.SOFT_LEFT -> { control.stepFocused(false); return true }
+                lk == LauncherKey.SOFT_RIGHT -> { control.stepFocused(true); return true }
+                else -> {}
+            }
             Screen.SETTINGS -> {}  // rows handle focus/center; Back exits (onBackPressed)
             Screen.NOTIF -> if (lk == LauncherKey.SOFT_LEFT) {   // left soft key = Clear all
                 try { LockListenerService.instance?.cancelAllNotifications() } catch (_: Exception) {}

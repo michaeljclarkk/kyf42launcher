@@ -15,14 +15,24 @@ import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.TextView
 
-/** Quick-toggle control center: flashlight, brightness, ringer, wifi/bt/airplane. */
+/** Quick-toggle control center: flashlight, brightness, volume, ringer, wifi/bt/airplane. */
 class ControlCenter(
     private val a: Activity,
     private val grid: GridLayout,
-    private val onSettings: () -> Unit
+    private val onSettings: () -> Unit,
+    /** Fired when D-pad focus lands on a different tile, so the caller can
+     *  relabel the soft-key bar (see [focusedCanStep]). */
+    private val onFocusChanged: () -> Unit = {},
 ) {
 
-    private class Tile(val view: View, val state: TextView, val stateFn: () -> String)
+    private class Tile(
+        val view: View,
+        val state: TextView,
+        val stateFn: () -> String,
+        /** Non-null when the soft keys can nudge this value up/down. */
+        val step: ((up: Boolean) -> Unit)? = null,
+    )
+
     private val tiles = mutableListOf<Tile>()
 
     private var torchOn = false
@@ -33,11 +43,11 @@ class ControlCenter(
         if (a.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_FLASH)) {
             addTile(R.drawable.ic_flash, "Flashlight", { toggleTorch() }) { if (torchOn) "On" else "Off" }
         }
-        addTile(R.drawable.ic_bright, "Brightness", { cycleBrightness() }) { "${brightnessPct()}%" }
+        addTile(R.drawable.ic_bright, "Brightness", { cycleBrightness() }, { brightnessStep(it) }) { "${brightnessPct()}%" }
         // This phone has no volume key at all (no VOLUME_* in any built-in
         // keylayout), so without this tile the only way to change volume is
         // Settings or headset buttons.
-        addTile(R.drawable.ic_vol, "Volume", { cycleVolume() }) { "${volumePct()}%" }
+        addTile(R.drawable.ic_vol, "Volume", { cycleVolume() }, { volumeStep(it) }) { "${volumePct()}%" }
         addTile(R.drawable.ic_ringer, "Profile", { cycleRinger() }) { ringerLabel() }
         // Settings.Panel exists only on API 29+; older releases get the full wifi screen.
         val wifiAction = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
@@ -52,12 +62,38 @@ class ControlCenter(
     fun firstView(): View? = tiles.firstOrNull()?.view
     fun refresh() = tiles.forEach { it.state.text = it.stateFn() }
 
-    private fun addTile(iconRes: Int, label: String, onClick: () -> Unit, stateFn: () -> String) {
+    /**
+     * True when the focused tile is one the soft keys can step (Brightness,
+     * Volume). Other tiles leave them inert rather than pretending to act.
+     */
+    fun focusedCanStep(): Boolean = focusedTile()?.step != null
+
+    /** Nudge the focused tile's value. No-op unless [focusedCanStep]. */
+    fun stepFocused(up: Boolean) {
+        focusedTile()?.step?.invoke(up)
+        refresh()
+    }
+
+    private fun focusedTile(): Tile? {
+        val f = grid.findFocus() ?: return null
+        return tiles.firstOrNull { it.view === f }
+    }
+
+    private fun addTile(
+        iconRes: Int,
+        label: String,
+        onClick: () -> Unit,
+        step: ((up: Boolean) -> Unit)? = null,
+        stateFn: () -> String,
+    ) {
         val v = LayoutInflater.from(a).inflate(R.layout.item_ctrl, grid, false)
         v.findViewById<ImageView>(R.id.ctrlIcon).setImageResource(iconRes)
         v.findViewById<TextView>(R.id.ctrlLabel).text = label
         val st = v.findViewById<TextView>(R.id.ctrlState)
         v.setOnClickListener { onClick(); refresh() }
+        // Moving between tiles changes whether the soft keys do anything, so the
+        // bar has to be relabelled as focus travels.
+        v.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) onFocusChanged() }
         val m = (5 * a.resources.displayMetrics.density).toInt()
         v.layoutParams = GridLayout.LayoutParams().apply {
             width = 0
@@ -65,7 +101,7 @@ class ControlCenter(
             setMargins(m, m, m, m)
         }
         grid.addView(v)
-        tiles.add(Tile(v, st, stateFn))
+        tiles.add(Tile(v, st, stateFn, step))
     }
 
     private fun onOff(b: Boolean) = if (b) "On" else "Off"
@@ -101,6 +137,17 @@ class ControlCenter(
         try { Settings.System.getInt(a.contentResolver, Settings.System.SCREEN_BRIGHTNESS) } catch (_: Exception) { 128 }
     private fun brightnessPct(): Int = (brightness() * 100 / 255)
 
+    // Fine nudge for the soft keys, versus the coarse cycle on tap. ~10% a press.
+    private fun brightnessStep(up: Boolean) {
+        if (!Settings.System.canWrite(a)) {
+            open(Settings.ACTION_MANAGE_WRITE_SETTINGS); return
+        }
+        val next = (brightness() + if (up) BRIGHT_STEP else -BRIGHT_STEP).coerceIn(10, 255)
+        Settings.System.putInt(a.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE,
+            Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+        Settings.System.putInt(a.contentResolver, Settings.System.SCREEN_BRIGHTNESS, next)
+    }
+
     // --- Volume: cycle 25/50/75/100 on the media stream, like Brightness above.
     // Media, not ring: ringer level is already covered by the Profile tile. No
     // permission needed, unlike brightness (which is why this one can't fail).
@@ -127,6 +174,21 @@ class ControlCenter(
         return am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max
     }
 
+    // One stream step per press — the natural resolution, unlike brightness
+    // which has no built-in step size.
+    private fun volumeStep(up: Boolean) {
+        val am = a.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        try {
+            am.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (up) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                0,
+            )
+        } catch (_: SecurityException) {
+            // DND can block volume changes.
+        }
+    }
+
     // --- Ringer (silent needs notification-policy access) ---
     private fun cycleRinger() { Ringer.cycle(a) }
     private fun ringerLabel(): String = Ringer.label(a)
@@ -141,6 +203,11 @@ class ControlCenter(
     private fun open(action: String) =
         try { a.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
     private fun openPanel(action: String) = open(action)
+
+    private companion object {
+        /** Brightness is 0-255, so this is roughly 10% a press. */
+        const val BRIGHT_STEP = 25
+    }
 }
 
 /**
